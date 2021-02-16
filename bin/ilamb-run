@@ -17,6 +17,8 @@ from netCDF4 import Dataset
 import pylab as plt
 import re
 from ILAMB.Post import RegisterCustomColormaps
+from urllib.request import urlretrieve
+import json
 if "wetdry" not in plt.colormaps(): RegisterCustomColormaps()
 
 # MPI stuff
@@ -534,6 +536,30 @@ def ParseRunOptions(filename):
                 run_opts[keyword] = value
     return run_opts
 
+def GetCMECUnifiedDashboard(build_dir):
+
+    base = "https://raw.githubusercontent.com/climatemodeling/unified-dashboard/master/dist/"
+    files = ["https://raw.githubusercontent.com/climatemodeling/unified-dashboard/master/dist/index.html",
+             "https://raw.githubusercontent.com/climatemodeling/unified-dashboard/master/dist/js/bundle-f86b090d87.min.js",
+             "https://raw.githubusercontent.com/climatemodeling/unified-dashboard/master/dist/css/bundle-2fae01ea7b.min.css"]
+    for src in files:
+        dst = src.replace(base,"")
+        dirname = os.path.join(build_dir,os.path.dirname(dst))
+        if not os.path.isdir(dirname): os.mkdir(dirname)
+        if dst == "index.html": dst = "dashboard.html"
+        dst = os.path.join(build_dir,dst)
+        if not os.path.isfile(dst): urlretrieve(src,dst)
+    with open(os.path.join(build_dir,"_lmtUDConfig.json"),'w') as outfile:
+        json.dump({ 
+            "udcJsonLoc":"scalar_database.json",
+            "udcDimSets":{"x_dim": "model", "y_dim": "metric", "fxdim": {"region":"global", "statistic":"Overall Score"}},
+            "udcScreenHeight":0,
+            "udcCellValue":0,
+            "logofile":"None"
+        },outfile)
+    
+    
+        
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--model_root', dest="model_root", metavar='root', type=str, nargs=1, default=["./"],
                     help='root at which to search for models')
@@ -699,6 +725,7 @@ if rank==0:
 if rank==0:
     S.dumpScores(M,"scores.csv")
     S.harvestInformation(M)
+    GetCMECUnifiedDashboard(args.build_dir[0])
     
 if (rank == 0              and
     ierr_reduced.max() > 0 and
